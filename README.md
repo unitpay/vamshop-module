@@ -1,0 +1,1 @@
+# vamshop-module
