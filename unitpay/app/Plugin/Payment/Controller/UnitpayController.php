@@ -20,13 +20,17 @@ class UnitpayController extends PaymentAppController {
 		$new_module['PaymentMethod']['icon'] = $this->icon;
 		$new_module['PaymentMethod']['alias'] = $this->module_name;
 
-		$new_module['PaymentMethodValue'][0]['payment_method_id'] = $this->PaymentMethod->id;
-		$new_module['PaymentMethodValue'][0]['key'] = 'public_key';
-		$new_module['PaymentMethodValue'][0]['value'] = '';
+        $new_module['PaymentMethodValue'][0]['payment_method_id'] = $this->PaymentMethod->id;
+        $new_module['PaymentMethodValue'][0]['key'] = 'domain';
+        $new_module['PaymentMethodValue'][0]['value'] = '';
 
 		$new_module['PaymentMethodValue'][1]['payment_method_id'] = $this->PaymentMethod->id;
-		$new_module['PaymentMethodValue'][1]['key'] = 'secret_key';
+		$new_module['PaymentMethodValue'][1]['key'] = 'public_key';
 		$new_module['PaymentMethodValue'][1]['value'] = '';
+
+		$new_module['PaymentMethodValue'][2]['payment_method_id'] = $this->PaymentMethod->id;
+		$new_module['PaymentMethodValue'][2]['key'] = 'secret_key';
+		$new_module['PaymentMethodValue'][2]['value'] = '';
 
 		$this->PaymentMethod->saveAll($new_module);
 			
@@ -49,6 +53,9 @@ class UnitpayController extends PaymentAppController {
 	{
 		$order = $this->Order->read(null,$_SESSION['Customer']['order_id']);
 
+        $domain_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'domain')));
+        $domain = $domain_payment['PaymentMethodValue']['value'];
+
 		$public_key_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'public_key')));
 		$public_key = $public_key_payment['PaymentMethodValue']['value'];
 
@@ -57,7 +64,7 @@ class UnitpayController extends PaymentAppController {
 		$desc = 'Заказ №' . $order['Order']['id'];
 
 		$content = '
-		<form action="https://www.unitpay.ru/pay/' . $public_key . '" method="get">
+		<form action="https://' . $domain . '/pay/' . $public_key . '" method="get">
 			<input type="hidden" name="sum" value="' . $sum . '">
 			<input type="hidden" name="account" value="' . $account . '">
 			<input type="hidden" name="desc" value="' . $desc . '">
