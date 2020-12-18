@@ -18,4 +18,15 @@ echo $this->Form->input('unitpay.secret_key', array(
 	'value' => $data['PaymentMethodValue'][2]['value']
 ));
 
+echo $this->Form->input('unitpay.nds', array(
+	'label' => 'НДС (none, vat0, vat10, vat20)',
+	'type' => 'text',
+	'value' => $data['PaymentMethodValue'][3]['value']
+));
+
+echo $this->Form->input('unitpay.delivery_nds', array(
+	'label' => 'НДС (Доставка) (none, vat0, vat10, vat20)',
+	'type' => 'text',
+	'value' => $data['PaymentMethodValue'][4]['value']
+));
 ?>

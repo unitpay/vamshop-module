@@ -31,6 +31,14 @@ class UnitpayController extends PaymentAppController {
 		$new_module['PaymentMethodValue'][2]['payment_method_id'] = $this->PaymentMethod->id;
 		$new_module['PaymentMethodValue'][2]['key'] = 'secret_key';
 		$new_module['PaymentMethodValue'][2]['value'] = '';
+		
+		$new_module['PaymentMethodValue'][3]['payment_method_id'] = $this->PaymentMethod->id;
+		$new_module['PaymentMethodValue'][3]['key'] = 'nds';
+		$new_module['PaymentMethodValue'][3]['value'] = 'none';
+		
+		$new_module['PaymentMethodValue'][4]['payment_method_id'] = $this->PaymentMethod->id;
+		$new_module['PaymentMethodValue'][4]['key'] = 'delivery_nds';
+		$new_module['PaymentMethodValue'][4]['value'] = 'none';
 
 		$this->PaymentMethod->saveAll($new_module);
 			
@@ -58,16 +66,80 @@ class UnitpayController extends PaymentAppController {
 
 		$public_key_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'public_key')));
 		$public_key = $public_key_payment['PaymentMethodValue']['value'];
+		
+		$secret_key_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'secret_key')));
+		$secret_key = $secret_key_payment['PaymentMethodValue']['value'];
+		
+		$nds_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'nds')));
+		$nds = $nds_payment['PaymentMethodValue']['value'];
 
+		$delivery_nds_payment = $this->PaymentMethod->PaymentMethodValue->find('first', array('conditions' => array('key' => 'delivery_nds')));
+		$delivery_nds = $delivery_nds_payment['PaymentMethodValue']['value'];
+		
 		$sum = $order_summ = number_format($order['Order']['total'], 2, '.', '');
 		$account = $order['Order']['id'];
 		$desc = 'Заказ №' . $order['Order']['id'];
+		$currency = $_SESSION['Customer']['currency_code'];
+		
+		$signature = hash('sha256', join('{up}', array(
+            $account,
+            $currency,
+            $desc,
+            $sum,
+            $secret_key
+        )));
 
+		$items = array();
+		
+		
+		App::import('Model', 'ContentProduct');
+		$ContentProduct = new ContentProduct();
+
+		App::import('Model', 'TaxCountryZoneRate');
+		$TaxCountryZoneRate = new TaxCountryZoneRate();
+			
+			
+		
+		foreach($order["OrderProduct"] as $item) {
+			//$ContentProduct = $ContentProduct->find('first', array('conditions' => array('ContentProduct.content_id' => $item['content_id'])));
+			//$TaxCountryZoneRate = $TaxCountryZoneRate->find('first', array('conditions' => array('TaxCountryZoneRate.country_zone_id' => $order['Order']['bill_state'], 'TaxCountryZoneRate.tax_id' => $ContentProduct['ContentProduct']['tax_id'])));
+
+			$items[] = array(
+				"name" => $item["name"],
+				"count" => $item["quantity"],
+				//"price" => number_format($item["price"], 2, '.', ''),
+				"price" => $item["price"],
+				"currency" => $currency,
+				"type" => "commodity",
+				"nds" => $nds,
+				//"nds" => isset($TaxCountryZoneRate["TaxCountryZoneRate"]["rate"]) ? $this->getTaxRates($TaxCountryZoneRate["TaxCountryZoneRate"]["rate"]) : "none"
+			);
+		}
+		
+		if($order["Order"]["shipping"] > 0) {
+			$items[] = array(
+				"name" => "Доставка",
+				"count" => 1,
+				//"price" => number_format($order["Order"]["shipping"], 2, '.', ''),
+				"price" => $order["Order"]["shipping"],
+				"currency" => $currency,
+				"type" => "service",
+				"nds" => $delivery_nds,
+			);
+		}
+		
+		$cashItems = base64_encode(json_encode($items));
+		
 		$content = '
 		<form action="https://' . $domain . '/pay/' . $public_key . '" method="get">
 			<input type="hidden" name="sum" value="' . $sum . '">
 			<input type="hidden" name="account" value="' . $account . '">
 			<input type="hidden" name="desc" value="' . $desc . '">
+			<input type="hidden" name="currency" value="' . $currency . '">
+			<input type="hidden" name="signature" value="' . $signature . '">
+			<input type="hidden" name="customerPhone" value="' . preg_replace('/\D/', '', $order["Order"]["phone"]). '">
+			<input type="hidden" name="customerEmail" value="' . $order["Order"]["email"] . '">
+			<input type="hidden" name="cashItems" value="' . $cashItems . '">
 			<button class="btn btn-default" type="submit" value="{lang}Confirm Order{/lang}"><i class="fa fa-check"></i> {lang}Confirm Order{/lang}</button>
 			</form>';
 
@@ -82,6 +154,24 @@ class UnitpayController extends PaymentAppController {
 		return $content;
 
 	}
+	
+	public function getTaxRates($rate){
+        switch (intval($rate)){
+            case 10:
+                $vat = 'vat10';
+                break;
+            case 20:
+                $vat = 'vat20';
+                break;
+            case 0:
+                $vat = 'vat0';
+                break;
+            default:
+                $vat = 'none';
+        }
+
+        return $vat;
+    }
 	
 	public function after_process()
 	{
@@ -144,7 +234,7 @@ class UnitpayController extends PaymentAppController {
 		}else{
 
 			$total = number_format($order['Order']['total'], 2, '.', '');
-			if ((float)$total != (float)$params['orderSum']) {
+			if ((float)$total != (float) number_format($params['orderSum'], 2, '.', '')) {
 				$result = array('error' =>
 					array('message' => 'не совпадает сумма заказа')
 				);
@@ -168,7 +258,7 @@ class UnitpayController extends PaymentAppController {
 		}else{
 
 			$total = number_format($order['Order']['total'], 2, '.', '');
-			if ((float)$total != (float)$params['orderSum']) {
+			if ((float)$total != (float) number_format($params['orderSum'], 2, '.', '')) {
 				$result = array('error' =>
 					array('message' => 'не совпадает сумма заказа')
 				);
